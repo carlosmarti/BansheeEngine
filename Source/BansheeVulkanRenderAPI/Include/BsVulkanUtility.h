@@ -52,16 +52,23 @@ namespace BansheeEngine
 		/**	Converts between Banshee and Vulkan draw operation (i.e. primitive topology). */
 		static VkPrimitiveTopology getDrawOp(DrawOperationType op);
 
+		/**	Converts between Banshee and Vulkan texture filtering modes. */
+		static VkFilter getFilter(FilterOptions filter);
+
+		/**	Converts between Banshee and Vulkan texture filtering modes. */
+		static VkSamplerMipmapMode getMipFilter(FilterOptions filter);
+
 		/** Gets Vulkan flags representing the number of samples in an image. Sample count must be a power of 2. */
 		static VkSampleCountFlagBits getSampleFlags(UINT32 numSamples);
 
-		/** Converts between a command buffer type and a Vulkan queue type. */
-		static VulkanQueueType getQueueType(CommandBufferType type);
-
 		/** 
 		 * Populates the provided array with Vulkan devices that correspond to provided flags. Sets null in unused slots. 
+		 * Each device is placed at its own index in the output array.
 		 */
-		static void getDevices(const VulkanRenderAPI& rapi, GpuDeviceFlags flags, VulkanDevice* (&devices)[BS_MAX_LINKED_DEVICES]);
+		static void getDevices(const VulkanRenderAPI& rapi, GpuDeviceFlags flags, VulkanDevice* (&devices)[BS_MAX_DEVICES]);
+
+		/** Checks is a flag for a particular device enabled. */
+		static bool isDeviceIdxSet(const VulkanRenderAPI& rapi, UINT32 idx, GpuDeviceFlags flags);
 	};
 
 	/** @} */

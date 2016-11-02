@@ -2,6 +2,7 @@
 //**************** Copyright (c) 2016 Marko Pintera (marko.pintera@gmail.com). All rights reserved. **********************//
 #include "BsVulkanUtility.h"
 #include "BsVulkanRenderAPI.h"
+#include "BsVulkanDevice.h"
 #include "BsException.h"
 
 namespace BansheeEngine
@@ -403,51 +404,57 @@ namespace BansheeEngine
 		return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	}
 
-	VulkanQueueType VulkanUtility::getQueueType(CommandBufferType type)
+	VkFilter VulkanUtility::getFilter(FilterOptions filter)
 	{
-		switch(type)
+		switch(filter)
 		{
-		case CBT_GRAPHICS:
-			return VQT_GRAPHICS;
-		case CBT_COMPUTE:
-			return VQT_COMPUTE;
-		case CBT_UPLOAD:
-			return VQT_UPLOAD;
+		case FO_LINEAR:
+		case FO_ANISOTROPIC:
+			return VK_FILTER_LINEAR;
+		case FO_POINT:
+		case FO_NONE:
+			return VK_FILTER_NEAREST;
 		}
 
 		// Unsupported type
-		return VQT_GRAPHICS;
+		return VK_FILTER_LINEAR;
 	}
 
-	void VulkanUtility::getDevices(const VulkanRenderAPI& rapi, GpuDeviceFlags flags, VulkanDevice*(&devices)[BS_MAX_LINKED_DEVICES])
+	VkSamplerMipmapMode VulkanUtility::getMipFilter(FilterOptions filter)
 	{
-		if(flags == GDF_DEFAULT)
+		switch (filter)
 		{
-			const Vector<SPtr<VulkanDevice>>& primaryDevices = rapi._getPrimaryDevices();
-			UINT32 count = std::min(BS_MAX_LINKED_DEVICES, (UINT32)primaryDevices.size());
+		case FO_LINEAR:
+		case FO_ANISOTROPIC:
+			return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		case FO_POINT:
+		case FO_NONE:
+			return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		}
 
-			for (UINT32 i = 0; i < count; i++)
-				devices[i] = primaryDevices[i].get();
+		// Unsupported type
+		return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	}
 
-			for (UINT32 i = count; i < BS_MAX_LINKED_DEVICES; i++)
+	void VulkanUtility::getDevices(const VulkanRenderAPI& rapi, GpuDeviceFlags flags, VulkanDevice*(&devices)[BS_MAX_DEVICES])
+	{
+		UINT32 numDevices = std::min(BS_MAX_DEVICES, rapi._getNumDevices());
+
+		for (UINT32 i = 0; i < numDevices; i++)
+		{
+			VulkanDevice* device = rapi._getDevice(i).get();
+
+			if (isDeviceIdxSet(rapi, i, flags))
+				devices[i] = device;
+			else
 				devices[i] = nullptr;
 		}
-		else
-		{
-			UINT32 numDevices = rapi._getNumDevices();
+	}
 
-			UINT32 deviceIdx = 0;
-			for(UINT32 i = 0; i < numDevices; i++)
-			{
-				if (flags & (1 << i))
-					devices[deviceIdx++] = rapi._getDevice(i).get();
+	bool VulkanUtility::isDeviceIdxSet(const VulkanRenderAPI& rapi, UINT32 idx, GpuDeviceFlags flags)
+	{
+		VulkanDevice* device = rapi._getDevice(idx).get();
 
-				if (deviceIdx >= BS_MAX_LINKED_DEVICES)
-					break;
-			}
-
-			for (UINT32 i = deviceIdx; i < BS_MAX_LINKED_DEVICES; i++)
-				devices[i] = nullptr;
-		}
+		return ((flags & (1 << idx)) != 0 || (flags == GDF_DEFAULT && device->isPrimary()));
 	}
 }

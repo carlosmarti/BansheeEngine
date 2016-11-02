@@ -25,6 +25,9 @@ namespace BansheeEngine
 		/** Returns an object describing the logical properties of the device. */
 		VkDevice getLogical() const { return mLogicalDevice; }
 
+		/** Returns true if the device is one of the primary GPU's. */
+		bool isPrimary() const;
+
 		/** Returns a set of properties describing the physical device. */
 		const VkPhysicalDeviceProperties& getDeviceProperties() const { return mDeviceProperties; }
 
@@ -35,22 +38,25 @@ namespace BansheeEngine
 		const VkPhysicalDeviceMemoryProperties& getMemoryProperties() const { return mMemoryProperties; }
 
 		/** Returns the number of queue supported on the device, per type. */
-		UINT32 getNumQueues(VulkanQueueType type) const { return (UINT32)mQueueInfos[(int)type].queues.size(); }
+		UINT32 getNumQueues(GpuQueueType type) const { return (UINT32)mQueueInfos[(int)type].queues.size(); }
 
 		/** Returns queue of the specified type at the specified index. Index must be in range [0, getNumQueues()). */
-		VulkanQueue* getQueue(VulkanQueueType type, UINT32 idx) const { return mQueueInfos[(int)type].queues[idx]; }
+		VulkanQueue* getQueue(GpuQueueType type, UINT32 idx) const { return mQueueInfos[(int)type].queues[idx]; }
 
 		/** 
 		 * Returns index of the queue family for the specified queue type. Returns -1 if no queues for the specified type 
 		 * exist. There will always be a queue family for the graphics type.
 		 */
-		UINT32 getQueueFamily(VulkanQueueType type) const { return mQueueInfos[(int)type].familyIdx; }
+		UINT32 getQueueFamily(GpuQueueType type) const { return mQueueInfos[(int)type].familyIdx; }
 
 		/** Returns a pool that can be used for allocating command buffers for all queues on this device. */
 		VulkanCmdBufferPool& getCmdBufferPool() const { return *mCommandBufferPool; }
 
 		/** Returns a manager that can be used for allocating descriptor layouts and sets. */
 		VulkanDescriptorManager& getDescriptorManager() const { return *mDescriptorManager; }
+
+		/** Returns a manager that can be used for allocating Vulkan objects wrapped as managed resources. */
+		VulkanResourceManager& getResourceManager() const { return *mResourceManager; }
 
 		/** 
 		 * Allocates memory for the provided image, and binds it to the image. Returns null if it cannot find memory
@@ -82,6 +88,7 @@ namespace BansheeEngine
 
 		VulkanCmdBufferPool* mCommandBufferPool;
 		VulkanDescriptorManager* mDescriptorManager;
+		VulkanResourceManager* mResourceManager;
 
 		VkPhysicalDeviceProperties mDeviceProperties;
 		VkPhysicalDeviceFeatures mDeviceFeatures;
@@ -94,7 +101,7 @@ namespace BansheeEngine
 			Vector<VulkanQueue*> queues;
 		};
 
-		QueueInfo mQueueInfos[VQT_COUNT];
+		QueueInfo mQueueInfos[GQT_COUNT];
 
 	};
 

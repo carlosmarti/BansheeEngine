@@ -5,6 +5,7 @@
 #include "BsVulkanPrerequisites.h"
 #include "BsCommandBuffer.h"
 #include "BsVulkanRenderAPI.h"
+#include "BsVulkanResource.h"
 
 namespace BansheeEngine
 {
@@ -24,19 +25,27 @@ namespace BansheeEngine
 		~VulkanCmdBufferPool();
 
 		/** Attempts to find a free command buffer, or creates a new one if not found. */
-		VulkanCmdBuffer* getBuffer(CommandBufferType type, UINT32 queueIdx, bool secondary);
+		VulkanCmdBuffer* getBuffer(GpuQueueType type, UINT32 queueIdx, bool secondary);
 
 	private:
+		/** Command buffer pool and related information. */
+		struct PoolInfo
+		{
+			VkCommandPool pool = VK_NULL_HANDLE;
+			UINT32 queueFamily = -1;
+		};
+
 		/** Creates a new command buffer. */
-		VulkanCmdBuffer* createBuffer(VulkanQueueType type, bool secondary);
+		VulkanCmdBuffer* createBuffer(GpuQueueType type, bool secondary);
 
 		/** Returns a Vulkan command pool for the specified queue type. */
-		VkCommandPool getPool(VulkanQueueType type);
+		const PoolInfo& getPool(GpuQueueType type);
 
 		VulkanDevice& mDevice;
-		VkCommandPool mPools[VQT_COUNT];
+		PoolInfo mPools[GQT_COUNT];
 
-		VulkanCmdBuffer* mBuffers[VQT_COUNT][BS_MAX_QUEUES_PER_TYPE][BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE];
+		VulkanCmdBuffer* mBuffers[GQT_COUNT][BS_MAX_QUEUES_PER_TYPE][BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE];
+		UINT32 mNextId;
 	};
 
 	/** 
@@ -61,8 +70,14 @@ namespace BansheeEngine
 		};
 
 	public:
-		VulkanCmdBuffer(VulkanDevice& device, VkCommandPool pool, bool secondary);
+		VulkanCmdBuffer(VulkanDevice& device, UINT32 id, VkCommandPool pool, UINT32 queueFamily, bool secondary);
 		~VulkanCmdBuffer();
+
+		/** Returns an unique identifier of this command buffer. */
+		UINT32 getId() const { return mId; }
+
+		/** Returns the index of the queue family this command buffer is executing on. */
+		UINT32 getQueueFamily() const { return mQueueFamily; }
 
 		/** Makes the command buffer ready to start recording commands. */
 		void begin();
@@ -100,10 +115,27 @@ namespace BansheeEngine
 		/** Checks the internal fence and changes command buffer state if done executing. */
 		void refreshFenceStatus();
 
+		/** 
+		 * Lets the command buffer know that the provided resource has been queued on it, and will be used by the
+		 * device when the command buffer is submitted.
+		 */
+		void registerResource(VulkanResource* res, VulkanUseFlags flags);
+
 	private:
 		friend class VulkanCmdBufferPool;
 		friend class VulkanCommandBuffer;
 
+		/** Information about a resource currently queued for use on the command buffer. */
+		struct ResourceInfo
+		{
+			VulkanUseFlags flags;
+		};
+
+		/** Called after the buffer has been submitted to the queue. */
+		void notifySubmit();
+
+		UINT32 mId;
+		UINT32 mQueueFamily;
 		State mState;
 		VulkanDevice& mDevice;
 		VkCommandPool mPool;
@@ -111,6 +143,8 @@ namespace BansheeEngine
 		VkFence mFence;
 		VkSemaphore mSemaphore;
 		UINT32 mFenceCounter;
+
+		UnorderedMap<VulkanResource*, ResourceInfo> mResources;
 	};
 
 	/** CommandBuffer implementation for Vulkan. */
@@ -131,7 +165,7 @@ namespace BansheeEngine
 	private:
 		friend class VulkanCommandBufferManager;
 
-		VulkanCommandBuffer(VulkanDevice& device, UINT32 id, CommandBufferType type, UINT32 deviceIdx, UINT32 queueIdx, 
+		VulkanCommandBuffer(VulkanDevice& device, UINT32 id, GpuQueueType type, UINT32 deviceIdx, UINT32 queueIdx,
 			bool secondary);
 
 		/** 
@@ -144,6 +178,7 @@ namespace BansheeEngine
 		VulkanCmdBuffer* mSubmittedBuffer;
 		VulkanDevice& mDevice;
 		VulkanQueue* mQueue;
+		UINT32 mIdMask;
 
 		VkSemaphore mSemaphoresTemp[BS_MAX_COMMAND_BUFFERS];
 	};

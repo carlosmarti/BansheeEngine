@@ -18,29 +18,41 @@ namespace BansheeEngine
 		~VulkanGpuParams();
 
 		/** @copydoc GpuParamsCore::setParamBlockBuffer(UINT32, UINT32, const ParamsBufferType&) */
-		void setParamBlockBuffer(UINT32 set, UINT32 slot, const ParamsBufferType& paramBlockBuffer) override;
+		void setParamBlockBuffer(UINT32 set, UINT32 slot, const SPtr<GpuParamBlockBufferCore>& paramBlockBuffer) override;
 
 		/** @copydoc GpuParamsCore::setTexture */
-		void setTexture(UINT32 set, UINT32 slot, const TextureType& texture) override;
+		void setTexture(UINT32 set, UINT32 slot, const SPtr<TextureCore>& texture) override;
 
 		/** @copydoc GpuParamsCore::setLoadStoreTexture */
-		void setLoadStoreTexture(UINT32 set, UINT32 slot, const TextureType& texture, 
+		void setLoadStoreTexture(UINT32 set, UINT32 slot, const SPtr<TextureCore>& texture,
 			const TextureSurface& surface) override;
 
 		/** @copydoc GpuParamsCore::setBuffer */
-		void setBuffer(UINT32 set, UINT32 slot, const BufferType& buffer) override;
+		void setBuffer(UINT32 set, UINT32 slot, const SPtr<GpuBufferCore>& buffer) override;
 
 		/** @copydoc GpuParamsCore::setSamplerState */
-		void setSamplerState(UINT32 set, UINT32 slot, const SamplerType& sampler) override;
+		void setSamplerState(UINT32 set, UINT32 slot, const SPtr<SamplerStateCore>& sampler) override;
 
 		/** @copydoc GpuParamsCore::setLoadStoreSurface */
 		void setLoadStoreSurface(UINT32 set, UINT32 slot, const TextureSurface& surface) override;
 
 	protected:
+		/** Contains data about writing to either buffer or a texture descriptor. */
+		union WriteInfo
+		{
+			VkDescriptorImageInfo image;
+			VkDescriptorBufferInfo buffer;
+		};
+
 		/** All GPU param data related to a single descriptor set. */
 		struct PerSetData
 		{
 			VulkanDescriptorLayout* layout;
+			VulkanDescriptorSet* set;
+
+			VkWriteDescriptorSet* writeSetInfos;
+			WriteInfo* writeInfos;
+			UINT32 numElements;
 		};
 
 		/** All GPU param data beloning to a single device. */
@@ -54,8 +66,10 @@ namespace BansheeEngine
 
 		VulkanGpuParams(const GPU_PARAMS_DESC& desc, GpuDeviceFlags deviceMask);
 
-		PerDeviceData mPerDeviceData[BS_MAX_LINKED_DEVICES];
-		UINT32 mNumDevices;
+		PerDeviceData mPerDeviceData[BS_MAX_DEVICES];
+		GpuDeviceFlags mDeviceMask;
+		UINT8* mData;
+		bool* mSetsDirty;
 	};
 
 	/** @} */

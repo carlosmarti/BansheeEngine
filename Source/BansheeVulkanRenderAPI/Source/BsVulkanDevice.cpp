@@ -11,7 +11,7 @@ namespace BansheeEngine
 		:mPhysicalDevice(device), mLogicalDevice(nullptr), mQueueInfos{}
 	{
 		// Set to default
-		for (UINT32 i = 0; i < VQT_COUNT; i++)
+		for (UINT32 i = 0; i < GQT_COUNT; i++)
 			mQueueInfos[i].familyIdx = (UINT32)-1;
 
 		vkGetPhysicalDeviceProperties(device, &mDeviceProperties);
@@ -28,7 +28,7 @@ namespace BansheeEngine
 		const float defaultQueuePriorities[BS_MAX_QUEUES_PER_TYPE] = { 0.0f };
 		Vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
-		auto populateQueueInfo = [&](VulkanQueueType type, uint32_t familyIdx)
+		auto populateQueueInfo = [&](GpuQueueType type, uint32_t familyIdx)
 		{
 			queueCreateInfos.push_back(VkDeviceQueueCreateInfo());
 
@@ -49,7 +49,7 @@ namespace BansheeEngine
 		{
 			if ((queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) && (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 			{
-				populateQueueInfo(VQT_COMPUTE, i);
+				populateQueueInfo(GQT_COMPUTE, i);
 				break;
 			}
 		}
@@ -61,7 +61,7 @@ namespace BansheeEngine
 				((queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0) &&
 				((queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0))
 			{
-				populateQueueInfo(VQT_UPLOAD, i);
+				populateQueueInfo(GQT_UPLOAD, i);
 				break;
 			}
 		}
@@ -71,7 +71,7 @@ namespace BansheeEngine
 		{
 			if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				populateQueueInfo(VQT_GRAPHICS, i);
+				populateQueueInfo(GQT_GRAPHICS, i);
 				break;
 			}
 		}
@@ -96,7 +96,7 @@ namespace BansheeEngine
 		assert(result == VK_SUCCESS);
 
 		// Retrieve queues
-		for(UINT32 i = 0; i < VQT_COUNT; i++)
+		for(UINT32 i = 0; i < GQT_COUNT; i++)
 		{
 			UINT32 numQueues = (UINT32)mQueueInfos[i].queues.size();
 			for (UINT32 j = 0; j < numQueues; j++)
@@ -111,22 +111,30 @@ namespace BansheeEngine
 		// Create pools/managers
 		mCommandBufferPool = bs_new<VulkanCmdBufferPool>(*this);
 		mDescriptorManager = bs_new<VulkanDescriptorManager>(*this);
+		mResourceManager = bs_new<VulkanResourceManager>(*this);
 	}
 
 	VulkanDevice::~VulkanDevice()
 	{
 		vkDeviceWaitIdle(mLogicalDevice);
 
-		for (UINT32 i = 0; i < VQT_COUNT; i++)
+		for (UINT32 i = 0; i < GQT_COUNT; i++)
 		{
 			UINT32 numQueues = (UINT32)mQueueInfos[i].queues.size();
 			for (UINT32 j = 0; j < numQueues; j++)
 				bs_delete(mQueueInfos[i].queues[j]);
 		}
 
+		bs_delete(mResourceManager);
 		bs_delete(mDescriptorManager);
 		bs_delete(mCommandBufferPool);
+		
 		vkDestroyDevice(mLogicalDevice, gVulkanAllocator);
+	}
+
+	bool VulkanDevice::isPrimary() const
+	{
+		return getDeviceProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 	}
 
 	VkDeviceMemory VulkanDevice::allocateMemory(VkImage image, VkMemoryPropertyFlags flags)
