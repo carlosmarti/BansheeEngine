@@ -2,8 +2,11 @@
 
 namespace BansheeEngine
 {
-	Sprite2d::Sprite2d()
+	Sprite2d::Sprite2d(const SPtr<CameraCore>& camera)
 	{
+		if(camera != nullptr)
+			mCamera = camera;
+
 		//create the vertex data for the mesh
 		spriteVertex[0] = Vector3(0, 0, 0);
 		spriteVertex[1] = Vector3(1, 0, 0);
@@ -35,9 +38,15 @@ namespace BansheeEngine
 		indices[4] = 3;
 		indices[5] = 1;
 
+		//create the mesh
+		mesh = Mesh::create(meshData);
+
 		//set texture (this will be moved to addTexture method)
 		texture = gImporter().import<Texture>("photo.jpg");
 
+		//set rendering callback
+		activeRenderer = RendererManager::instance().getActive();
+		activeRenderer->registerRenderCallback(mCamera.get(), 40, std::bind(&Sprite2d::setUp, this), true);
 	}
 
 	Sprite2d::~Sprite2d()
@@ -55,4 +64,13 @@ namespace BansheeEngine
 		return texture;
 	}
 
+	void Sprite2d::addtarget(SPtr<RenderTargetCore> target)
+	{
+		renderApi.setRenderTarget(target);
+	}
+
+	void Sprite2d::setUp()
+	{
+
+	}
 }

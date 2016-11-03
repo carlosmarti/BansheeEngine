@@ -10,6 +10,10 @@
 #include "BsCoreObjectCore.h"
 #include "BsImporter.h"
 
+#include "BsRenderAPI.h"
+#include "BsCoreRenderer.h"
+#include "BsRendererManager.h"
+
 namespace BansheeEngine
 {
 	class BS_CORE_EXPORT Sprite2d : public CoreObject
@@ -23,12 +27,18 @@ namespace BansheeEngine
 			SPtr<VertexDataDesc> vertexDDesc;
 
 			Vector3 spriteVertex[4];
+
+			RenderAPICore& renderApi = RenderAPICore::instance();
+			SPtr<CameraCore> mCamera;
+			SPtr<CoreRenderer> activeRenderer;
 		public:
-			Sprite2d();
+			Sprite2d(const SPtr<CameraCore>&);
 			~Sprite2d();
 
 			void addTexture();
 			HTexture getTexture();
 			
+			void addtarget(SPtr<RenderTargetCore>);
+			void setUp();
 	};
 }
