@@ -29,7 +29,7 @@ namespace BansheeEngine
 	/** Types of builtin shaders that are always available. */
 	enum class BuiltinShader
 	{
-		Standard, Custom
+		Standard, Custom, ImageAlpha
 	};
 
 	/**	Holds references to built-in resources used by the core engine. */

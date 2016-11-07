@@ -13,6 +13,8 @@
 #include "BsRenderAPI.h"
 #include "BsCoreRenderer.h"
 #include "BsRendererManager.h"
+#include "BsBuiltinResources.h"
+#include "BsMaterial.h"
 
 namespace BansheeEngine
 {
@@ -31,6 +33,12 @@ namespace BansheeEngine
 			RenderAPICore& renderApi = RenderAPICore::instance();
 			SPtr<CameraCore> mCamera;
 			SPtr<CoreRenderer> activeRenderer;
+			SPtr<RenderTargetCore> mTarget;
+			HMaterial material;
+			BuiltinResources builtInRes;
+			BuiltinShader builtInShader;
+			
+
 		public:
 			Sprite2d(const SPtr<CameraCore>&);
 			~Sprite2d();

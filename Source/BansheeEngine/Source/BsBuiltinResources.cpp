@@ -1101,6 +1101,8 @@ namespace BansheeEngine
 		{
 		case BuiltinShader::Standard:
 				return mShaderDiffuse;
+		case BuiltinShader::ImageAlpha:
+				return mShaderSpriteImage;
 		}
 
 		return HShader();

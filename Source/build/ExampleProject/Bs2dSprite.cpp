@@ -6,6 +6,8 @@ namespace BansheeEngine
 	{
 		if(camera != nullptr)
 			mCamera = camera;
+		builtInRes = BuiltinResources::instance();
+		builtInShader = BuiltinShader::ImageAlpha;
 
 		//create the vertex data for the mesh
 		spriteVertex[0] = Vector3(0, 0, 0);
@@ -47,6 +49,7 @@ namespace BansheeEngine
 		//set rendering callback
 		activeRenderer = RendererManager::instance().getActive();
 		activeRenderer->registerRenderCallback(mCamera.get(), 40, std::bind(&Sprite2d::setUp, this), true);
+
 	}
 
 	Sprite2d::~Sprite2d()
@@ -66,11 +69,24 @@ namespace BansheeEngine
 
 	void Sprite2d::addtarget(SPtr<RenderTargetCore> target)
 	{
-		renderApi.setRenderTarget(target);
+		mTarget = target;
+		renderApi.setRenderTarget(mTarget);
 	}
 
 	void Sprite2d::setUp()
 	{
+		float invHeight = 1.0 / mTarget->getProperties().getHeight();
+		float invWidth = 1.0 / mTarget->getProperties().getWidth();
+
+		material = Material::create();
+		material->setShader(builtInRes.getBuiltinShader(builtInShader));
+		material->setFloat("invViewportWidth", invWidth);
+		material->setFloat("invViewportHeight", invHeight);
+		material->setMat4("worldTransform", Matrix4::IDENTITY);
+		material->setTexture("mainTexture", texture);
+		material->setColor("tint", Color::White);
+
 
 	}
+
 }
