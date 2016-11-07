@@ -7,8 +7,8 @@
 
 namespace BansheeEngine
 {
-	VulkanDevice::VulkanDevice(VkPhysicalDevice device)
-		:mPhysicalDevice(device), mLogicalDevice(nullptr), mQueueInfos{}
+	VulkanDevice::VulkanDevice(VkPhysicalDevice device, UINT32 deviceIdx)
+		:mPhysicalDevice(device), mLogicalDevice(nullptr), mIsPrimary(false), mDeviceIdx(deviceIdx), mQueueInfos()
 	{
 		// Set to default
 		for (UINT32 i = 0; i < GQT_COUNT; i++)
@@ -104,7 +104,7 @@ namespace BansheeEngine
 				VkQueue queue;
 				vkGetDeviceQueue(mLogicalDevice, mQueueInfos[i].familyIdx, j, &queue);
 
-				mQueueInfos[i].queues[j] = bs_new<VulkanQueue>(queue);
+				mQueueInfos[i].queues[j] = bs_new<VulkanQueue>(*this, queue, (GpuQueueType)i, j);
 			}
 		}
 
@@ -116,7 +116,7 @@ namespace BansheeEngine
 
 	VulkanDevice::~VulkanDevice()
 	{
-		vkDeviceWaitIdle(mLogicalDevice);
+		waitIdle();
 
 		for (UINT32 i = 0; i < GQT_COUNT; i++)
 		{
@@ -132,9 +132,10 @@ namespace BansheeEngine
 		vkDestroyDevice(mLogicalDevice, gVulkanAllocator);
 	}
 
-	bool VulkanDevice::isPrimary() const
+	void VulkanDevice::waitIdle() const
 	{
-		return getDeviceProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+		VkResult result = vkDeviceWaitIdle(mLogicalDevice);
+		assert(result == VK_SUCCESS);
 	}
 
 	VkDeviceMemory VulkanDevice::allocateMemory(VkImage image, VkMemoryPropertyFlags flags)

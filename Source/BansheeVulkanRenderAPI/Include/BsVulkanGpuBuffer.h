@@ -34,20 +34,21 @@ namespace BansheeEngine
 		void copyData(GpuBufferCore& srcBuffer, UINT32 srcOffset, 
 			UINT32 dstOffset, UINT32 length, bool discardWholeBuffer = false) override;
 		
+		/** 
+		 * Gets the resource wrapping the buffer object, on the specified device. If GPU param block buffer's device mask
+		 * doesn't include the provided device, null is returned. 
+		 */
+		VulkanBuffer* getResource(UINT32 deviceIdx) const;
 	protected:
 		friend class VulkanHardwareBufferCoreManager;
 
 		VulkanGpuBufferCore(const GPU_BUFFER_DESC& desc, GpuDeviceFlags deviceMask);
 
-		/** @copydoc GpuBufferCore::createView */
-		GpuBufferView* createView() override;
-
-		/** @copydoc GpuBufferCore::destroyView */
-		void destroyView(GpuBufferView* view) override;
-
 		/** @copydoc GpuBufferCore::initialize */
 		void initialize() override;
 	private:
+		VulkanHardwareBuffer* mBuffer;
+		GpuDeviceFlags mDeviceMask;
     };
 
 	/** @} */

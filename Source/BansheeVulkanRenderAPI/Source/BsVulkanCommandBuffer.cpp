@@ -4,12 +4,13 @@
 #include "BsVulkanCommandBufferManager.h"
 #include "BsVulkanUtility.h"
 #include "BsVulkanDevice.h"
+#include "BsVulkanGpuParams.h"
 #include "BsVulkanQueue.h"
 
 namespace BansheeEngine
 {
 	VulkanCmdBufferPool::VulkanCmdBufferPool(VulkanDevice& device)
-		:mDevice(device), mPools{}, mBuffers {}, mNextId(1)
+		:mDevice(device), mNextId(1)
 	{
 		for (UINT32 i = 0; i < GQT_COUNT; i++)
 		{
@@ -18,51 +19,51 @@ namespace BansheeEngine
 			if (familyIdx == (UINT32)-1)
 				continue;
 
-			VkCommandPoolCreateInfo poolInfo;
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			poolInfo.pNext = nullptr;
-			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = familyIdx;
+			VkCommandPoolCreateInfo poolCI;
+			poolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolCI.pNext = nullptr;
+			poolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+			poolCI.queueFamilyIndex = familyIdx;
 
-			mPools[i].queueFamily = familyIdx;
-			vkCreateCommandPool(device.getLogical(), &poolInfo, gVulkanAllocator, &mPools[i].pool);
+			PoolInfo& poolInfo = mPools[familyIdx];
+			poolInfo.queueFamily = familyIdx;
+			memset(poolInfo.buffers, 0, sizeof(poolInfo.buffers));
+
+			vkCreateCommandPool(device.getLogical(), &poolCI, gVulkanAllocator, &poolInfo.pool);
 		}
 	}
 
 	VulkanCmdBufferPool::~VulkanCmdBufferPool()
 	{
-		for (UINT32 i = 0; i < GQT_COUNT; i++)
+		// Note: Shutdown should be the only place command buffers are destroyed at, as the system relies on the fact that
+		// they won't be destroyed during normal operation.
+
+		for(auto& entry : mPools)
 		{
-			for(UINT32 j = 0; j < BS_MAX_QUEUES_PER_TYPE; j++)
+			PoolInfo& poolInfo = entry.second;
+			for (UINT32 i = 0; i < BS_MAX_VULKAN_CB_PER_QUEUE_FAMILY; i++)
 			{
-				VulkanCmdBuffer** buffers = mBuffers[i][j];
-				for(UINT32 k = 0; k < BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE; k++)
-				{
-					if (buffers[k] == nullptr)
-						break;
+				VulkanCmdBuffer* buffer = poolInfo.buffers[i];
+				if (buffer == nullptr)
+					break;
 
-					bs_delete(buffers[k]);
-				}
+				bs_delete(buffer);
 			}
-		}
 
-		for (UINT32 i = 0; i < GQT_COUNT; i++)
-		{
-			if (mPools[i].pool == VK_NULL_HANDLE)
-				continue;
-
-			vkDestroyCommandPool(mDevice.getLogical(), mPools[i].pool, gVulkanAllocator);
+			vkDestroyCommandPool(mDevice.getLogical(), poolInfo.pool, gVulkanAllocator);
 		}
 	}
 
-	VulkanCmdBuffer* VulkanCmdBufferPool::getBuffer(GpuQueueType type, UINT32 queueIdx, bool secondary)
+	VulkanCmdBuffer* VulkanCmdBufferPool::getBuffer(UINT32 queueFamily, bool secondary)
 	{
-		assert(queueIdx < BS_MAX_QUEUES_PER_TYPE);
+		auto iterFind = mPools.find(queueFamily);
+		if (iterFind != mPools.end())
+			return nullptr;
 
-		VulkanCmdBuffer** buffers = mBuffers[type][queueIdx];
+		VulkanCmdBuffer** buffers = iterFind->second.buffers;
 
 		UINT32 i = 0;
-		for(; i < BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE; i++)
+		for(; i < BS_MAX_VULKAN_CB_PER_QUEUE_FAMILY; i++)
 		{
 			if (buffers[i] == nullptr)
 				break;
@@ -74,33 +75,28 @@ namespace BansheeEngine
 			}
 		}
 
-		assert(i < BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE && 
-			"Too many command buffers allocated. Increment BS_MAX_VULKAN_COMMAND_BUFFERS_PER_QUEUE to a higher value. ");
+		assert(i < BS_MAX_VULKAN_CB_PER_QUEUE_FAMILY &&
+			"Too many command buffers allocated. Increment BS_MAX_VULKAN_CB_PER_QUEUE_FAMILY to a higher value. ");
 
-		buffers[i] = createBuffer(type, secondary);
+		buffers[i] = createBuffer(queueFamily, secondary);
 		buffers[i]->begin();
 
 		return buffers[i];
 	}
 
-	VulkanCmdBuffer* VulkanCmdBufferPool::createBuffer(GpuQueueType type, bool secondary)
+	VulkanCmdBuffer* VulkanCmdBufferPool::createBuffer(UINT32 queueFamily, bool secondary)
 	{
-		const PoolInfo& poolInfo = getPool(type);
+		auto iterFind = mPools.find(queueFamily);
+		if (iterFind != mPools.end())
+			return nullptr;
+
+		const PoolInfo& poolInfo = iterFind->second;
 
 		return bs_new<VulkanCmdBuffer>(mDevice, mNextId++, poolInfo.pool, poolInfo.queueFamily, secondary);
 	}
 
-	const VulkanCmdBufferPool::PoolInfo& VulkanCmdBufferPool::getPool(GpuQueueType type)
-	{
-		const PoolInfo* poolInfo = &mPools[type];
-		if (poolInfo->pool == VK_NULL_HANDLE)
-			poolInfo = &mPools[GQT_GRAPHICS]; // Graphics queue is guaranteed to exist
-
-		return *poolInfo;
-	}
-
 	VulkanCmdBuffer::VulkanCmdBuffer(VulkanDevice& device, UINT32 id, VkCommandPool pool, UINT32 queueFamily, bool secondary)
-		:mId(id), mQueueFamily(queueFamily), mState(State::Ready), mDevice(device), mPool(pool), mFenceCounter(0)
+		: mId(id), mQueueFamily(queueFamily), mState(State::Ready), mDevice(device), mPool(pool), mFenceCounter(0)
 	{
 		VkCommandBufferAllocateInfo cmdBufferAllocInfo;
 		cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -147,6 +143,11 @@ namespace BansheeEngine
 		vkDestroyFence(device, mFence, gVulkanAllocator);
 		vkDestroySemaphore(device, mSemaphore, gVulkanAllocator);
 		vkFreeCommandBuffers(device, mPool, 1, &mCmdBuffer);
+	}
+
+	UINT32 VulkanCmdBuffer::getDeviceIdx() const
+	{
+		return mDevice.getIndex();
 	}
 
 	void VulkanCmdBuffer::begin()
@@ -217,6 +218,7 @@ namespace BansheeEngine
 					entry.first->notifyDone(this);
 
 				mResources.clear();
+				mBoundParams.clear();
 			}
 		}
 		else
@@ -228,49 +230,159 @@ namespace BansheeEngine
 		mResources[res].flags |= flags;
 	}
 
-	void VulkanCmdBuffer::notifySubmit()
+	void VulkanCmdBuffer::registerGpuParams(const SPtr<VulkanGpuParams>& params)
 	{
-		// TODO - Issue pipeline barrier for resources transitioning to a new queue family
+		mBoundParams.insert(params);
+	}
+
+	void VulkanCmdBuffer::submit(VulkanQueue* queue, UINT32 queueIdx, UINT32 syncMask)
+	{
+		assert(isReadyForSubmit());
+
+		// Issue pipeline barriers for queue transitions (need to happen on original queue first, then on new queue)
+		for (auto& entry : mBoundParams)
+			entry->prepareForSubmit(this, mTransitionInfoTemp);
+
+		VulkanDevice& device = queue->getDevice();
+		for (auto& entry : mTransitionInfoTemp)
+		{
+			UINT32 entryQueueFamily = entry.first;
+
+			// No queue transition needed for entries on this queue (this entry is most likely an in image layout transition)
+			if (entryQueueFamily == mQueueFamily)
+				continue;
+
+			VulkanCmdBuffer* cmdBuffer = device.getCmdBufferPool().getBuffer(entryQueueFamily, false);
+			VkCommandBuffer vkCmdBuffer = cmdBuffer->getHandle();
+
+			TransitionInfo& barriers = entry.second;
+			UINT32 numImgBarriers = (UINT32)barriers.imageBarriers.size();
+			UINT32 numBufferBarriers = (UINT32)barriers.bufferBarriers.size();
+
+			vkCmdPipelineBarrier(vkCmdBuffer,
+								 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								 0, 0, nullptr,
+								 numBufferBarriers, barriers.bufferBarriers.data(),
+								 numImgBarriers, barriers.imageBarriers.data());
+
+			// Find an appropriate queue to execute on
+			UINT32 otherQueueIdx = 0;
+			VulkanQueue* otherQueue = nullptr;
+			GpuQueueType otherQueueType = GQT_GRAPHICS;
+			for (UINT32 i = 0; i < GQT_COUNT; i++)
+			{
+				if (device.getQueueFamily(otherQueueType) != entryQueueFamily)
+					continue;
+
+				UINT32 numQueues = device.getNumQueues(otherQueueType);
+				for(UINT32 j = 0; j < numQueues; j++)
+				{
+					// Try to find a queue not currently executing
+					VulkanQueue* curQueue = device.getQueue(otherQueueType, j);
+					if(!curQueue->isExecuting())
+					{
+						otherQueue = curQueue;
+						otherQueueIdx = j;
+					}
+				}
+
+				// Can't find empty one, use the first one then
+				if(otherQueue == nullptr)
+				{
+					otherQueue = device.getQueue(otherQueueType, 0);
+					otherQueueIdx = 0;
+				}
+
+				otherQueueType = (GpuQueueType)i;
+				break;
+			}
+
+			UINT32 otherGlobalQueueIdx = CommandSyncMask::getGlobalQueueIdx(otherQueueType, otherQueueIdx);
+			syncMask |= otherGlobalQueueIdx;
+
+			cmdBuffer->end();
+			cmdBuffer->submit(otherQueue, otherQueueIdx, 0);
+
+			// If there are any layout transitions, reset them as we don't need them for the second pipeline barrier
+			for (auto& barrierEntry : barriers.imageBarriers)
+				barrierEntry.oldLayout = barrierEntry.newLayout;
+		}
+
+		UINT32 deviceIdx = device.getIndex();
+		VulkanCommandBufferManager& cbm = static_cast<VulkanCommandBufferManager&>(CommandBufferManager::instance());
+
+		UINT32 numSemaphores;
+		cbm.getSyncSemaphores(deviceIdx, syncMask, mSemaphoresTemp, numSemaphores);
+
+		// Issue second part of transition pipeline barriers (on this queue)
+		for (auto& entry : mTransitionInfoTemp)
+		{
+			VulkanCmdBuffer* cmdBuffer = device.getCmdBufferPool().getBuffer(mQueueFamily, false);
+			VkCommandBuffer vkCmdBuffer = cmdBuffer->getHandle();
+
+			TransitionInfo& barriers = entry.second;
+			UINT32 numImgBarriers = (UINT32)barriers.imageBarriers.size();
+			UINT32 numBufferBarriers = (UINT32)barriers.bufferBarriers.size();
+
+			vkCmdPipelineBarrier(vkCmdBuffer,
+								 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								 0, 0, nullptr,
+								 numBufferBarriers, barriers.bufferBarriers.data(),
+								 numImgBarriers, barriers.imageBarriers.data());
+
+			cmdBuffer->end();
+
+			queue->submit(cmdBuffer, mSemaphoresTemp, numSemaphores);
+			numSemaphores = 0; // Semaphores are only needed the first time, since we're adding the buffers on the same queue
+		}
+
+		queue->submit(this, mSemaphoresTemp, numSemaphores);
 
 		for (auto& entry : mResources)
 			entry.first->notifyUsed(this, entry.second.flags);
+
+		cbm.refreshStates(deviceIdx);
+
+		// Note: Uncommented for debugging only, prevents any device concurrency issues.
+		// vkQueueWaitIdle(queue->getHandle());
+
+		mState = State::Submitted;
+		cbm.setActiveBuffer(queue->getType(), deviceIdx, queueIdx, this);
+
+		// Clear vectors but don't clear the actual map, as we want to re-use the memory since we expect queue family
+		// indices to be the same
+		for (auto& entry : mTransitionInfoTemp)
+		{
+			entry.second.imageBarriers.clear();
+			entry.second.bufferBarriers.clear();
+		}
 	}
 
-	VulkanCommandBuffer::VulkanCommandBuffer(VulkanDevice& device, UINT32 id, GpuQueueType type, UINT32 deviceIdx,
+	VulkanCommandBuffer::VulkanCommandBuffer(VulkanDevice& device, GpuQueueType type, UINT32 deviceIdx,
 		UINT32 queueIdx, bool secondary)
-		: CommandBuffer(id, type, deviceIdx, queueIdx, secondary), mBuffer(nullptr), mSubmittedBuffer(nullptr)
+		: CommandBuffer(type, deviceIdx, queueIdx, secondary), mBuffer(nullptr)
 		, mDevice(device), mQueue(nullptr), mIdMask(0)
 	{
-		GpuQueueType queueType = mType;
-
-		UINT32 numQueues = device.getNumQueues(queueType);
-		if (numQueues == 0) // Fallback to graphics queue
+		UINT32 numQueues = device.getNumQueues(mType);
+		if (numQueues == 0) // Fall back to graphics queue
 		{
-			queueType = GQT_GRAPHICS;
+			mType = GQT_GRAPHICS;
 			numQueues = device.getNumQueues(GQT_GRAPHICS);
 		}
 
-		mQueue = device.getQueue(queueType, mQueueIdx % numQueues);
+		mQueue = device.getQueue(mType, mQueueIdx % numQueues);
 
 		// If multiple command buffer IDs map to the same queue, mark them in the mask
 		UINT32 curIdx = mQueueIdx;
 		while (curIdx < BS_MAX_QUEUES_PER_TYPE)
 		{
-			mIdMask |= CommandSyncMask::getGlobalQueueIdx(queueType, curIdx);
+			mIdMask |= CommandSyncMask::getGlobalQueueIdx(mType, curIdx);
 			curIdx += numQueues;
 		}
 
 		acquireNewBuffer();
-	}
-
-	void VulkanCommandBuffer::refreshSubmitStatus()
-	{
-		if (mSubmittedBuffer == nullptr) // Nothing was submitted
-			return;
-
-		mSubmittedBuffer->refreshFenceStatus();
-		if (!mSubmittedBuffer->isSubmitted())
-			mSubmittedBuffer = nullptr;
 	}
 
 	void VulkanCommandBuffer::acquireNewBuffer()
@@ -280,50 +392,16 @@ namespace BansheeEngine
 		if (mBuffer != nullptr)
 			assert(mBuffer->isSubmitted());
 
-		mSubmittedBuffer = mBuffer;
-		mBuffer = pool.getBuffer(mType, mQueueIdx, mIsSecondary);
+		UINT32 queueFamily = mDevice.getQueueFamily(mType);
+		mBuffer = pool.getBuffer(queueFamily, mIsSecondary);
 	}
 
 	void VulkanCommandBuffer::submit(UINT32 syncMask)
 	{
-		assert(mBuffer != nullptr && mBuffer->isReadyForSubmit());
-
-		VkCommandBuffer cmdBuffer = mBuffer->getHandle();
-		VkSemaphore signalSemaphore = mBuffer->getSemaphore();
-
-		VkSubmitInfo submitInfo;
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.pNext = nullptr;
-		submitInfo.pWaitDstStageMask = 0;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &cmdBuffer;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &signalSemaphore;
-
 		// Ignore myself
 		syncMask &= ~mIdMask;
 
-		VulkanCommandBufferManager& cmdBufManager = static_cast<VulkanCommandBufferManager&>(CommandBufferManager::instance());
-		cmdBufManager.getSyncSemaphores(mDeviceIdx, syncMask, mSemaphoresTemp, submitInfo.waitSemaphoreCount);
-
-		if (submitInfo.waitSemaphoreCount > 0)
-			submitInfo.pWaitSemaphores = mSemaphoresTemp;
-		else
-			submitInfo.pWaitSemaphores = nullptr;
-
-		VkQueue queue = mQueue->getHandle();
-		VkFence fence = mBuffer->getFence();
-		vkQueueSubmit(queue, 1, &submitInfo, fence);
-
-		cmdBufManager.refreshStates(mDeviceIdx);
-
-		mBuffer->notifySubmit();
-		mQueue->notifySubmit(*this, mBuffer->getFenceCounter());
-
-		// Note: Uncommented for debugging only, prevents any device concurrency issues.
-		// vkQueueWaitIdle(mQueue);
-
-		mBuffer->mState = VulkanCmdBuffer::State::Submitted;
+		mBuffer->submit(mQueue, mQueueIdx, syncMask);
 		acquireNewBuffer();
 	}
 }

@@ -14,6 +14,7 @@
 #include "BsVulkanGLSLProgramFactory.h"
 #include "BsVulkanCommandBufferManager.h"
 #include "BsVulkanCommandBuffer.h"
+#include "BsVulkanGpuParams.h"
 #include "BsVulkanVertexInputManager.h"
 #include "Win32/BsWin32VideoModeInfo.h"
 
@@ -179,14 +180,17 @@ namespace BansheeEngine
 
 		mDevices.resize(numDevices);
 		for(uint32_t i = 0; i < numDevices; i++)
-			mDevices[i] = bs_shared_ptr_new<VulkanDevice>(physicalDevices[i]);
+			mDevices[i] = bs_shared_ptr_new<VulkanDevice>(physicalDevices[i], i);
 
 		// Find primary device
 		// Note: MULTIGPU - Detect multiple similar devices here if supporting multi-GPU
 		for (uint32_t i = 0; i < numDevices; i++)
 		{
-			if (mDevices[i]->isPrimary())
+			bool isPrimary = mDevices[i]->getDeviceProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+
+			if (isPrimary)
 			{
+				mDevices[i]->setIsPrimary();
 				mPrimaryDevices.push_back(mDevices[i]);
 				break;
 			}
@@ -216,6 +220,9 @@ namespace BansheeEngine
 
 		// Create command buffer manager
 		CommandBufferManager::startUp<VulkanCommandBufferManager>(*this);
+
+		// Create main command buffer
+		mMainCommandBuffer = std::static_pointer_cast<VulkanCommandBuffer>(CommandBuffer::create(GQT_GRAPHICS));
 
 		// Create the texture manager for use by others		
 		TextureManager::startUp<VulkanTextureManager>();
@@ -266,6 +273,17 @@ namespace BansheeEngine
 		HardwareBufferManager::shutDown();
 		TextureCoreManager::shutDown();
 		TextureManager::shutDown();
+
+		mMainCommandBuffer = nullptr;
+
+		// Make sure everything finishes and all resources get freed
+		VulkanCommandBufferManager& cmdBufManager = static_cast<VulkanCommandBufferManager&>(CommandBufferManager::instance());
+		for (UINT32 i = 0; i < (UINT32)mDevices.size(); i++)
+		{
+			mDevices[i]->waitIdle();
+			cmdBufManager.refreshStates(i);
+		}
+
 		CommandBufferManager::shutDown();
 
 		mPrimaryDevices.clear();
@@ -295,6 +313,12 @@ namespace BansheeEngine
 
 	void VulkanRenderAPI::setGpuParams(const SPtr<GpuParamsCore>& gpuParams, const SPtr<CommandBuffer>& commandBuffer)
 	{
+		VulkanCommandBuffer* cb = getCB(commandBuffer);
+		SPtr<VulkanGpuParams> vulkanGpuParams = std::static_pointer_cast<VulkanGpuParams>(gpuParams);
+
+		vulkanGpuParams->bind(*cb);
+		cb->getInternal()->registerGpuParams(vulkanGpuParams);
+
 		BS_INC_RENDER_STAT(NumGpuParamBinds);
 	}
 
@@ -394,10 +418,13 @@ namespace BansheeEngine
 	{
 		THROW_IF_NOT_CORE_THREAD;
 
+		VulkanCommandBuffer* cb = getCB(commandBuffer);
+
 		// TODO - Actually swap buffers
 
-		VulkanCommandBuffer& cmdBuffer = static_cast<VulkanCommandBuffer&>(*commandBuffer);
-		cmdBuffer.refreshSubmitStatus();
+		// See if any command buffers finished executing
+		VulkanCommandBufferManager& cbm = static_cast<VulkanCommandBufferManager&>(CommandBufferManager::instance());
+		cbm.refreshStates(cb->getDeviceIdx());
 
 		BS_INC_RENDER_STAT(NumPresents);
 	}
@@ -557,5 +584,13 @@ namespace BansheeEngine
 
 			deviceIdx++;
 		}
+	}
+
+	VulkanCommandBuffer* VulkanRenderAPI::getCB(const SPtr<CommandBuffer>& buffer)
+	{
+		if (buffer != nullptr)
+			return static_cast<VulkanCommandBuffer*>(buffer.get());
+
+		return static_cast<VulkanCommandBuffer*>(mMainCommandBuffer.get());
 	}
 }

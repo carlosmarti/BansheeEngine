@@ -1,13 +1,14 @@
 //********************************** Banshee Engine (www.banshee3d.com) **************************************************//
 //**************** Copyright (c) 2016 Marko Pintera (marko.pintera@gmail.com). All rights reserved. **********************//
 #include "BsVulkanGpuBuffer.h"
+#include "BsVulkanHardwareBuffer.h"
 #include "BsRenderStats.h"
 #include "BsException.h"
 
 namespace BansheeEngine
 {
 	VulkanGpuBufferCore::VulkanGpuBufferCore(const GPU_BUFFER_DESC& desc, GpuDeviceFlags deviceMask)
-		: GpuBufferCore(desc, deviceMask)
+		: GpuBufferCore(desc, deviceMask), mBuffer(nullptr), mDeviceMask(deviceMask)
 	{
 		if (desc.type != GBT_STANDARD)
 			assert(desc.format == BF_UNKNOWN && "Format must be set to BF_UNKNOWN when using non-standard buffers");
@@ -17,13 +18,26 @@ namespace BansheeEngine
 
 	VulkanGpuBufferCore::~VulkanGpuBufferCore()
 	{ 
-		clearBufferViews();
+		if (mBuffer != nullptr)
+			bs_delete(mBuffer);
+
 		BS_INC_RENDER_STAT_CAT(ResDestroyed, RenderStatObject_GpuBuffer);
 	}
 
 	void VulkanGpuBufferCore::initialize()
 	{
 		BS_INC_RENDER_STAT_CAT(ResCreated, RenderStatObject_GpuBuffer);
+
+		const GpuBufferProperties& props = getProperties();
+
+		VulkanHardwareBuffer::BufferType bufferType;
+		if (props.getRandomGpuWrite())
+			bufferType = VulkanHardwareBuffer::BT_STORAGE;
+		else
+			bufferType = VulkanHardwareBuffer::BT_GENERIC;;
+
+		UINT32 size = props.getElementCount() * props.getElementSize();;
+		mBuffer = bs_new<VulkanHardwareBuffer>(bufferType, props.getFormat(), props.getUsage(), size, mDeviceMask);
 
 		GpuBufferCore::initialize();
 	}
@@ -66,14 +80,8 @@ namespace BansheeEngine
 
 	}
 
-	GpuBufferView* VulkanGpuBufferCore::createView()
+	VulkanBuffer* VulkanGpuBufferCore::getResource(UINT32 deviceIdx) const
 	{
-		// Not used
-		return nullptr;
-	}
-
-	void VulkanGpuBufferCore::destroyView(GpuBufferView* view)
-	{
-		// Not used
+		return mBuffer->getResource(deviceIdx);
 	}
 }

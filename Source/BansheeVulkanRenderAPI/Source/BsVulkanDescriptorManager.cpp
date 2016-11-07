@@ -2,6 +2,7 @@
 //**************** Copyright (c) 2016 Marko Pintera (marko.pintera@gmail.com). All rights reserved. **********************//
 #include "BsVulkanDescriptorManager.h"
 #include "BsVulkanDescriptorLayout.h"
+#include "BsVulkanDescriptorSet.h"
 #include "BsVulkanDescriptorPool.h"
 #include "BsVulkanDevice.h"
 #include "BsVulkanResource.h"
@@ -39,6 +40,35 @@ namespace BansheeEngine
 		return true;
 	}
 
+	VulkanPipelineLayoutKey::VulkanPipelineLayoutKey(VulkanDescriptorLayout** layouts, UINT32 numLayouts)
+		:layouts(layouts), numLayouts(numLayouts)
+	{
+		
+	}
+
+	bool VulkanPipelineLayoutKey::operator==(const VulkanPipelineLayoutKey& rhs) const
+	{
+		if (numLayouts != rhs.numLayouts)
+			return false;
+
+		for (UINT32 i = 0; i < numLayouts; i++)
+		{
+			if (layouts[i] != rhs.layouts[i])
+				return false;
+		}
+
+		return true;
+	}
+
+	size_t VulkanPipelineLayoutKey::calculateHash() const
+	{
+		size_t hash = 0;
+		for (UINT32 i = 0; i < numLayouts; i++)
+			hash_combine(hash, layouts[i]->getHash());
+
+		return hash;
+	}
+
 	VulkanDescriptorManager::VulkanDescriptorManager(VulkanDevice& device)
 		:mDevice(device)
 	{
@@ -52,6 +82,9 @@ namespace BansheeEngine
 			bs_delete(entry.layout);
 			bs_free(entry.bindings);
 		}
+
+		for(auto& entry : mPipelineLayouts)
+			vkDestroyPipelineLayout(mDevice.getLogical(), entry.second, gVulkanAllocator);
 
 		for (auto& entry : mPools)
 			bs_delete(entry);
@@ -102,5 +135,37 @@ namespace BansheeEngine
 		}
 
 		return mDevice.getResourceManager().create<VulkanDescriptorSet>(set, allocateInfo.descriptorPool);
+	}
+
+	VkPipelineLayout VulkanDescriptorManager::getPipelineLayout(VulkanDescriptorLayout** layouts, UINT32 numLayouts)
+	{
+		VulkanPipelineLayoutKey key(layouts, numLayouts);
+
+		auto iterFind = mPipelineLayouts.find(key);
+		if (iterFind != mPipelineLayouts.end())
+			return iterFind->second;
+
+		// Create new
+		VkDescriptorSetLayout* setLayouts = (VkDescriptorSetLayout*)bs_stack_alloc(sizeof(VkDescriptorSetLayout) * numLayouts);
+		for(UINT32 i = 0; i < numLayouts; i++)
+			setLayouts[i] = layouts[i]->getHandle();
+
+		VkPipelineLayoutCreateInfo layoutCI;
+		layoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layoutCI.pNext = nullptr;
+		layoutCI.flags = 0;
+		layoutCI.pushConstantRangeCount = 0;
+		layoutCI.pPushConstantRanges = nullptr;
+		layoutCI.setLayoutCount = numLayouts;
+		layoutCI.pSetLayouts = setLayouts;
+
+		VkPipelineLayout pipelineLayout;
+		VkResult result = vkCreatePipelineLayout(mDevice.getLogical(), &layoutCI, gVulkanAllocator, &pipelineLayout);
+		assert(result != VK_SUCCESS);
+
+		bs_stack_free(setLayouts);
+
+		mPipelineLayouts.insert(std::make_pair(key, pipelineLayout));
+		return pipelineLayout;
 	}
 }
