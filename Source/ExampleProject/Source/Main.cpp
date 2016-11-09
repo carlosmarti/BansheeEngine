@@ -28,6 +28,7 @@
 #include "BsSceneObject.h"
 #include "BsCoreThread.h"
 #include "BsProfilerOverlay.h"
+#include "Bs2dSprite.h"
 
 // Example includes
 #include "CameraFlyer.h"
@@ -136,6 +137,8 @@ namespace BansheeEngine
 
 	bool cpuProfilerActive = false;
 	bool gpuProfilerActive = false;
+
+	
 
 	void setUpExample()
 	{
@@ -287,6 +290,7 @@ namespace BansheeEngine
 		// Position and orient the camera scene object
 		sceneCameraSO->setPosition(Vector3(-130.0f, 140.0f, 650.0f));
 		sceneCameraSO->lookAt(Vector3(0, 0, 0));
+
 	}
 
 	/** Register mouse and keyboard inputs that will be used for controlling the camera. */
@@ -366,6 +370,9 @@ namespace BansheeEngine
 		// GUI skin defines how are all child elements of the GUI widget renderered. It contains all their styles
 		// and default layout properties. We use the default skin that comes built into Banshee.
 		gui->setSkin(BuiltinResources::instance().getGUISkin());
+
+		// get camera
+		Scene2d texture = Scene2d(sceneCamera);
 
 		// Get the primary GUI panel that stretches over the entire window and add to it a vertical layout
 		// that will be using for vertically positioning messages about toggling profiler overlay.
