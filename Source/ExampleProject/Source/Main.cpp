@@ -11,6 +11,7 @@
 #include "BsShader.h"
 #include "BsVirtualInput.h"
 #include "BsCCamera.h"
+#include "BsCamera.h"
 #include "BsCRenderable.h"
 #include "BsCGUIWidget.h"
 #include "BsGUILayoutX.h"
@@ -287,6 +288,10 @@ namespace BansheeEngine
 		// Add a CameraFlyer component that allows us to move the camera. See CameraFlyer for more information.
 		sceneCameraSO->addComponent<CameraFlyer>();
 
+		// get camera
+		SPtr<Sprite2d> texture = bs_shared_ptr_new<Sprite2d>(sceneCamera->_getCamera()->getCore());
+		texture->addtarget(sceneCamera->_getCamera()->getCore()->getViewport()->getTarget());
+
 		// Position and orient the camera scene object
 		sceneCameraSO->setPosition(Vector3(-130.0f, 140.0f, 650.0f));
 		sceneCameraSO->lookAt(Vector3(0, 0, 0));
@@ -370,9 +375,6 @@ namespace BansheeEngine
 		// GUI skin defines how are all child elements of the GUI widget renderered. It contains all their styles
 		// and default layout properties. We use the default skin that comes built into Banshee.
 		gui->setSkin(BuiltinResources::instance().getGUISkin());
-
-		// get camera
-		Scene2d texture = Scene2d(sceneCamera);
 
 		// Get the primary GUI panel that stretches over the entire window and add to it a vertical layout
 		// that will be using for vertically positioning messages about toggling profiler overlay.

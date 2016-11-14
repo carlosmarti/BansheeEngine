@@ -20,7 +20,7 @@
 
 namespace BansheeEngine
 {
-	class BS_CORE_EXPORT Sprite2d : public CoreObject
+	class Sprite2d : public CoreObject
 	{
 		private:
 			HMesh mesh;
@@ -31,7 +31,7 @@ namespace BansheeEngine
 			SPtr<VertexData> vertexData;
 			SPtr<VertexDataDesc> vertexDDesc;
 
-			Vector3 spriteVertex[4];
+			std::vector<Vector3> spriteVertex{ std::vector<Vector3>{Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)} };
 
 			RenderAPICore& renderApi = RenderAPICore::instance();
 			SPtr<CameraCore> mCamera;

@@ -25,8 +25,14 @@ namespace BansheeEngine
 		meshData = MeshData::create(4, 6, vertexDDesc);
 
 		//give vertex to the created meshData
-		UINT8*(spriteVertex);
-		meshData->setVertexData(VES_POSITION, spriteVertex, sizeof(spriteVertex));
+		/*std::vector<UINT8> vector3ToUint8{ std::vector<UINT8>{0,0,0,0} };
+		for (int i = 0; i < spriteVertex.size(); i++)
+		{
+			vector3ToUint8.at(i) = reinterpret_cast<UINT8>(&spriteVertex.at(i));
+		}*/
+
+		//UINT8*(spriteVertex);
+		meshData->setVertexData(VES_POSITION, (UINT8*)spriteVertex.data(), 3 * sizeof(spriteVertex));
 
 		//set the indices
 		UINT32* indices = meshData->getIndices32();
@@ -44,7 +50,7 @@ namespace BansheeEngine
 		mesh = Mesh::create(meshData);
 
 		//create the mesh core
-		meshCore = mesh->getCore;
+		meshCore = mesh->getCore();
 
 		//set texture (this will be moved to addTexture method)
 		texture = gImporter().import<Texture>("photo.jpg");
@@ -90,14 +96,14 @@ namespace BansheeEngine
 		material->setColor("tint", Color::White);
 
 		materialCore = material->getCore();
-		mParam = material->createParamsSet();
+		mParam = materialCore->createParamsSet();
 		passCore = materialCore->getPass();
 
 		renderApi.setGraphicsPipeline(passCore->getPipelineState());
 
 		gRendererUtility().setPass(materialCore);
 		gRendererUtility().setPassParams(mParam);
-		gRendererUtility().draw(meshCore, meshCore->getProperties().getSubMesh(0));8
+		gRendererUtility().draw(meshCore, meshCore->getProperties().getSubMesh(0));
 
 
 	}
