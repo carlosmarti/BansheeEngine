@@ -55,15 +55,25 @@ namespace BansheeEngine
 		//set texture (this will be moved to addTexture method)
 		texture = gImporter().import<Texture>("photo.jpg");
 
-		//set rendering callback
-		activeRenderer = RendererManager::instance().getActive();
-		activeRenderer->registerRenderCallback(mCamera.get(), 40, std::bind(&Sprite2d::setUp, this), true);
+		float invHeight = 1.0 / mTarget->getProperties().getHeight();
+		float invWidth = 1.0 / mTarget->getProperties().getWidth();
 
+		material = Material::create();
+		material->setShader(builtInRes.getBuiltinShader(builtInShader));
+		material->setFloat("invViewportWidth", invWidth);
+		material->setFloat("invViewportHeight", invHeight);
+		material->setMat4("worldTransform", Matrix4::IDENTITY);
+		material->setTexture("mainTexture", texture);
+		material->setColor("tint", Color::White);
+
+
+		mSpriteCore.store(bs_new<SpriteRenderer>(), std::memory_order_release);
+		gCoreAccessor().queueCommand(std::bind(&Sprite2d::startSpriteRenderer, this, material->getCore()));
 	}
 
 	Sprite2d::~Sprite2d()
 	{
-
+		gCoreAccessor().queueCommand(std::bind(&Sprite2d::deleteSpriteRenderer, this, mSpriteCore.load(std::memory_order_relaxed)));
 	}
 
 	void Sprite2d::addTexture()
@@ -76,26 +86,41 @@ namespace BansheeEngine
 		return texture;
 	}
 
-	void Sprite2d::addtarget(SPtr<RenderTargetCore> target)
+	void Sprite2d::startSpriteRenderer(const SPtr<MaterialCore>& initMaterial)
+	{
+		mSpriteCore.load(std::memory_order_acquire)->setUp(initMaterial);
+	}
+
+	void Sprite2d::deleteSpriteRenderer(SpriteRenderer* core)
+	{
+
+	}
+
+	//Sprite Renderer class
+
+	SpriteRenderer::SpriteRenderer()
+	{
+
+		//set rendering callback
+		activeRenderer = RendererManager::instance().getActive();
+		activeRenderer->registerRenderCallback(mCamera.get(), 40, std::bind(&SpriteRenderer::setUp, this), true);
+	}
+
+	SpriteRenderer::~SpriteRenderer()
+	{
+		activeRenderer->unregisterRenderCallback(mCamera.get(), 40);
+	}
+
+	void SpriteRenderer::addtarget(SPtr<RenderTargetCore> target)
 	{
 		mTarget = target;
 		renderApi.setRenderTarget(mTarget);
 	}
 
-	void Sprite2d::setUp()
+	void SpriteRenderer::setUp(const SPtr<MaterialCore>& material)
 	{
-		float invHeight = 1.0 / mTarget->getProperties().getHeight();
-		float invWidth = 1.0 / mTarget->getProperties().getWidth();
 
-		material = Material::create();
-		material->setShader(builtInRes.getBuiltinShader(builtInShader));
-		material->setFloat("invViewportWidth", invWidth);
-		material->setFloat("invViewportHeight", invHeight);
-		material->setMat4("worldTransform", Matrix4::IDENTITY);
-		material->setTexture("mainTexture", texture);
-		material->setColor("tint", Color::White);
-
-		materialCore = material->getCore();
+		materialCore = material;
 		mParam = materialCore->createParamsSet();
 		passCore = materialCore->getPass();
 

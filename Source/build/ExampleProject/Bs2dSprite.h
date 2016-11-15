@@ -12,6 +12,8 @@
 
 #include <BsCoreThreadAccessor.h>
 #include "BsRenderAPI.h"
+#include "BsCoreApplication.h"
+#include "BsCoreThread.h"
 #include "BsCoreRenderer.h"
 #include "BsRendererManager.h"
 #include "BsRendererUtility.h"
@@ -29,6 +31,7 @@ namespace BansheeEngine
 			HMesh mesh;
 			SPtr<MeshCore> meshCore;
 			HTexture texture;
+			HMaterial material;
 
 			SPtr<MeshData> meshData;
 			SPtr<VertexData> vertexData;
@@ -41,7 +44,8 @@ namespace BansheeEngine
 			BuiltinResources builtInRes;
 			BuiltinShader builtInShader;
 			
-			void startSpriteRenderer();
+			void startSpriteRenderer(const SPtr<MaterialCore>&);
+			void deleteSpriteRenderer(SpriteRenderer*);
 
 		public:
 			Sprite2d(const SPtr<CameraCore>&);
@@ -60,15 +64,15 @@ namespace BansheeEngine
 		~SpriteRenderer();
 
 		void addtarget(SPtr<RenderTargetCore>);
-		void setUp();
+		void setUp(const SPtr<MaterialCore>&);
 		void render();
 
 	private:
+		friend Sprite2d;
 		RenderAPICore& renderApi = RenderAPICore::instance();
 		SPtr<CameraCore> mCamera;
 		SPtr<CoreRenderer> activeRenderer;
 		SPtr<RenderTargetCore> mTarget;
-		HMaterial material;
 		SPtr<MaterialCore> materialCore;
 		SPtr<PassCore> passCore;
 		SPtr<GpuParamsSetCore> mParam;
