@@ -10,6 +10,7 @@
 #include "BsCoreObjectCore.h"
 #include "BsImporter.h"
 
+#include <BsCoreThreadAccessor.h>
 #include "BsRenderAPI.h"
 #include "BsCoreRenderer.h"
 #include "BsRendererManager.h"
@@ -20,6 +21,8 @@
 
 namespace BansheeEngine
 {
+	class SpriteRenderer;
+
 	class Sprite2d : public CoreObject
 	{
 		private:
@@ -33,17 +36,12 @@ namespace BansheeEngine
 
 			std::vector<Vector3> spriteVertex{ std::vector<Vector3>{Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)} };
 
-			RenderAPICore& renderApi = RenderAPICore::instance();
-			SPtr<CameraCore> mCamera;
-			SPtr<CoreRenderer> activeRenderer;
-			SPtr<RenderTargetCore> mTarget;
-			HMaterial material;
-			SPtr<MaterialCore> materialCore;
-			SPtr<PassCore> passCore;
-			SPtr<GpuParamsSetCore> mParam;
+			std::atomic<SpriteRenderer*> mSpriteCore;
+			
 			BuiltinResources builtInRes;
 			BuiltinShader builtInShader;
 			
+			void startSpriteRenderer();
 
 		public:
 			Sprite2d(const SPtr<CameraCore>&);
@@ -52,7 +50,27 @@ namespace BansheeEngine
 			void addTexture();
 			HTexture getTexture();
 			
-			void addtarget(SPtr<RenderTargetCore>);
-			void setUp();
+			
+	};
+
+	class SpriteRenderer
+	{
+	public:
+		SpriteRenderer();
+		~SpriteRenderer();
+
+		void addtarget(SPtr<RenderTargetCore>);
+		void setUp();
+		void render();
+
+	private:
+		RenderAPICore& renderApi = RenderAPICore::instance();
+		SPtr<CameraCore> mCamera;
+		SPtr<CoreRenderer> activeRenderer;
+		SPtr<RenderTargetCore> mTarget;
+		HMaterial material;
+		SPtr<MaterialCore> materialCore;
+		SPtr<PassCore> passCore;
+		SPtr<GpuParamsSetCore> mParam;
 	};
 }

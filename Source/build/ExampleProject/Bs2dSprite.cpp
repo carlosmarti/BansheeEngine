@@ -108,4 +108,10 @@ namespace BansheeEngine
 
 	}
 
+	//start of defining the sprite rendering
+	SpriteRenderer::SpriteRenderer()
+	{
+
+	}
+
 }
