@@ -289,8 +289,7 @@ namespace BansheeEngine
 		sceneCameraSO->addComponent<CameraFlyer>();
 
 		// get camera
-		SPtr<Sprite2d> texture = bs_shared_ptr_new<Sprite2d>(sceneCamera->_getCamera()->getCore());
-		texture->addtarget(sceneCamera->_getCamera()->getCore()->getViewport()->getTarget());
+		SPtr<Sprite2d> texture = bs_shared_ptr_new<Sprite2d>(sceneCamera->_getCamera()->getCore(), sceneCamera->_getCamera()->getCore()->getViewport()->getTarget());
 
 		// Position and orient the camera scene object
 		sceneCameraSO->setPosition(Vector3(-130.0f, 140.0f, 650.0f));

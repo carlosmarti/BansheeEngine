@@ -44,11 +44,11 @@ namespace BansheeEngine
 			BuiltinResources builtInRes;
 			BuiltinShader builtInShader;
 			
-			void startSpriteRenderer(const SPtr<MaterialCore>&);
+			void startSpriteRenderer(const SPtr<MaterialCore>&, const SPtr<CameraCore>& , SPtr<RenderTargetCore>, SPtr<MeshCore> );
 			void deleteSpriteRenderer(SpriteRenderer*);
 
 		public:
-			Sprite2d(const SPtr<CameraCore>&);
+			Sprite2d(const SPtr<CameraCore>&,SPtr<RenderTargetCore>);
 			~Sprite2d();
 
 			void addTexture();
@@ -63,14 +63,13 @@ namespace BansheeEngine
 		SpriteRenderer();
 		~SpriteRenderer();
 
-		void addtarget(SPtr<RenderTargetCore>);
-		void setUp(const SPtr<MaterialCore>&);
+		void setUp(const SPtr<MaterialCore>&, const SPtr<CameraCore>& , SPtr<RenderTargetCore>, SPtr<MeshCore> );
 		void render();
 
 	private:
-		friend Sprite2d;
 		RenderAPICore& renderApi = RenderAPICore::instance();
 		SPtr<CameraCore> mCamera;
+		SPtr<MeshCore> mMeshCore;
 		SPtr<CoreRenderer> activeRenderer;
 		SPtr<RenderTargetCore> mTarget;
 		SPtr<MaterialCore> materialCore;

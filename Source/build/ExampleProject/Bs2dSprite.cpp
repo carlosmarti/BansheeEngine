@@ -2,10 +2,9 @@
 
 namespace BansheeEngine
 {
-	Sprite2d::Sprite2d(const SPtr<CameraCore>& camera)
+	Sprite2d::Sprite2d(const SPtr<CameraCore>& camera, SPtr<RenderTargetCore> target)
 	{
-		if(camera != nullptr)
-			mCamera = camera;
+		
 		builtInRes = BuiltinResources::instance();
 		builtInShader = BuiltinShader::ImageAlpha;
 
@@ -25,11 +24,6 @@ namespace BansheeEngine
 		meshData = MeshData::create(4, 6, vertexDDesc);
 
 		//give vertex to the created meshData
-		/*std::vector<UINT8> vector3ToUint8{ std::vector<UINT8>{0,0,0,0} };
-		for (int i = 0; i < spriteVertex.size(); i++)
-		{
-			vector3ToUint8.at(i) = reinterpret_cast<UINT8>(&spriteVertex.at(i));
-		}*/
 
 		//UINT8*(spriteVertex);
 		meshData->setVertexData(VES_POSITION, (UINT8*)spriteVertex.data(), 3 * sizeof(spriteVertex));
@@ -55,8 +49,8 @@ namespace BansheeEngine
 		//set texture (this will be moved to addTexture method)
 		texture = gImporter().import<Texture>("photo.jpg");
 
-		float invHeight = 1.0 / mTarget->getProperties().getHeight();
-		float invWidth = 1.0 / mTarget->getProperties().getWidth();
+		float invHeight = 1.0 / target->getProperties().getHeight();
+		float invWidth = 1.0 / target->getProperties().getWidth();
 
 		material = Material::create();
 		material->setShader(builtInRes.getBuiltinShader(builtInShader));
@@ -68,7 +62,7 @@ namespace BansheeEngine
 
 
 		mSpriteCore.store(bs_new<SpriteRenderer>(), std::memory_order_release);
-		gCoreAccessor().queueCommand(std::bind(&Sprite2d::startSpriteRenderer, this, material->getCore()));
+		gCoreAccessor().queueCommand(std::bind(&Sprite2d::startSpriteRenderer, this, material->getCore(), camera, target, meshCore));
 	}
 
 	Sprite2d::~Sprite2d()
@@ -86,14 +80,14 @@ namespace BansheeEngine
 		return texture;
 	}
 
-	void Sprite2d::startSpriteRenderer(const SPtr<MaterialCore>& initMaterial)
+	void Sprite2d::startSpriteRenderer(const SPtr<MaterialCore>& initMaterial, const SPtr<CameraCore>& camera, SPtr<RenderTargetCore> target, SPtr<MeshCore> meshcore)
 	{
-		mSpriteCore.load(std::memory_order_acquire)->setUp(initMaterial);
+		mSpriteCore.load(std::memory_order_acquire)->setUp(initMaterial, camera, target, meshcore);
 	}
 
 	void Sprite2d::deleteSpriteRenderer(SpriteRenderer* core)
 	{
-
+		bs_delete(core);
 	}
 
 	//Sprite Renderer class
@@ -101,42 +95,43 @@ namespace BansheeEngine
 	SpriteRenderer::SpriteRenderer()
 	{
 
-		//set rendering callback
-		activeRenderer = RendererManager::instance().getActive();
-		activeRenderer->registerRenderCallback(mCamera.get(), 40, std::bind(&SpriteRenderer::setUp, this), true);
 	}
 
 	SpriteRenderer::~SpriteRenderer()
 	{
-		activeRenderer->unregisterRenderCallback(mCamera.get(), 40);
+		if (mCamera != nullptr)
+		{
+			activeRenderer->unregisterRenderCallback(mCamera.get(), 50);
+		}
+		
 	}
 
-	void SpriteRenderer::addtarget(SPtr<RenderTargetCore> target)
+	void SpriteRenderer::setUp(const SPtr<MaterialCore>& material, const SPtr<CameraCore>& camera, SPtr<RenderTargetCore> target, SPtr<MeshCore> meshCore)
 	{
 		mTarget = target;
-		renderApi.setRenderTarget(mTarget);
-	}
-
-	void SpriteRenderer::setUp(const SPtr<MaterialCore>& material)
-	{
-
+		mCamera = camera;
+		mMeshCore = meshCore;
 		materialCore = material;
 		mParam = materialCore->createParamsSet();
 		passCore = materialCore->getPass();
+
+		renderApi.setRenderTarget(mTarget);
+
+		//set rendering callback
+		activeRenderer = RendererManager::instance().getActive();
+		if(mCamera != nullptr)
+			activeRenderer->registerRenderCallback(mCamera.get(), 50, std::bind(&SpriteRenderer::setUp, this), true);
+	}
+
+	void SpriteRenderer::render()
+	{
+
 
 		renderApi.setGraphicsPipeline(passCore->getPipelineState());
 
 		gRendererUtility().setPass(materialCore);
 		gRendererUtility().setPassParams(mParam);
-		gRendererUtility().draw(meshCore, meshCore->getProperties().getSubMesh(0));
-
-
-	}
-
-	//start of defining the sprite rendering
-	SpriteRenderer::SpriteRenderer()
-	{
-
+		gRendererUtility().draw(mMeshCore, mMeshCore->getProperties().getSubMesh(0));
 	}
 
 }
